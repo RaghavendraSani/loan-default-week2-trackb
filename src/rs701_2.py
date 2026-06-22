@@ -7,19 +7,14 @@ test = pd.read_csv("../data/test.csv")
 
 #print("Train shape: ")
 #print(train.shape)
-
 #print("\nTest shape: ")
 #print(test.shape)
-
 #print("\ncolumns: ")
 #print(train.columns.tolist())
-
 #print("\nData Types: ")
 #print(train.dtypes)
-
 #print("\nMissing Values: ")
 #print(train.isnull().sum())
-
 #print("\ntarget distribution: ")
 #print(train["default"].value_counts())
 #print(train["default"].value_counts(normalize=False))
@@ -39,15 +34,11 @@ for col in categorical_cols:
 #print("\n"+"="*50)
 #print("num feature summ. ")
 #print(train.describe())
-
 #print("\nTarget distribution:")
 #print(train["default"].value_counts())
-
 #print("\nTarget percentages:")
 #print(train["default"].value_counts(normalize=True))
-
 #print("\nUnique values per categorical column")
-
 #for col in categorical_cols:
     #print(f"\n{col}")
     #print(train[col].unique())
@@ -114,40 +105,54 @@ def encode_categorical_features(train_df, test_df):
 
 train, test = encode_categorical_features(train, test)
 
+noise_columns = [
+    "noise_num_1",
+    "noise_num_2",
+    "noise_num_3",
+    "noise_num_4",
+    "noise_cat_1_B",
+    "noise_cat_1_C",
+    "noise_cat_1_D"
+]
+train = train.drop(columns=noise_columns)
+test = test.drop(columns=noise_columns)
+
 #print("\nTrain shape after encoding:")
 #print(train.shape)
-
 #print("\nTest shape after encoding:")
 #print(test.shape)
-
 #print("\nColumns after encoding:")
 #print(train.columns.tolist())
 
 def scale_features(train_df, test_df):
-
-    feature_cols = [col for col in train_df.columns if col != "default"]
-
-    for col in feature_cols:
-
+    numerical_cols = [
+        "age",
+        "annual_income",
+        "monthly_debt",
+        "credit_score",
+        "num_credit_lines",
+        "employment_years",
+        "loan_amount",
+        "loan_term_months",
+        "num_late_payments",
+        "savings_balance"
+    ]
+    for col in numerical_cols:
         mean = train_df[col].mean()
         std = train_df[col].std()
-
         if std != 0:
             train_df[col] = (train_df[col] - mean) / std
             test_df[col] = (test_df[col] - mean) / std
-
     return train_df, test_df
 
 train, test = scale_features(train, test)
+
 #print("\nTrain head: ")
 #print(train.head())
-
 #print("\nTest head: ")
 #print(test.head())
-
 #print("\ntrain shape: ")
 #print(train.shape)
-
 #print("\ntest shape: ")
 #print(test.shape)
 
@@ -161,12 +166,9 @@ print("X_test shape:", X_test.shape)
 
 indices = np.arange(len(X))
 np.random.shuffle(indices)
-
 split_index = int(len(X) * 0.8)
-
 train_idx = indices[:split_index]
 val_idx = indices[split_index:]
-
 X_train = X[train_idx]
 y_train = y[train_idx]
 
@@ -178,6 +180,7 @@ print("Validation samples:", len(X_val))
 
 
 def sigmoid(z):
+    z = np.clip(z, -500, 500)
     return 1/(1 + np.exp(-z))
 
 def initialize_parameters(n_features):
@@ -191,12 +194,7 @@ def forward_pass(X, weights, bias):
     return predictions
 
 weights, bias = initialize_parameters(X_train.shape[1])
-
-predictions = forward_pass(
-    X_train,
-    weights,
-    bias
-)
+predictions = forward_pass(X_train, weights, bias)
 
 print("\nFirst 10 predictions:")
 print(predictions[:10])
@@ -205,11 +203,11 @@ def compute_loss(y_true, y_pred):
     epsilon = 1e-15
     y_pred = np.clip(y_pred, epsilon, 1-epsilon)
     loss = -np.mean(
-        y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred)
+        y_true * np.log(y_pred)+(1 - y_true) * np.log(1 - y_pred)
     )
     return loss
-
 loss = compute_loss(y_train, predictions)
+
 print("\ninitial loss: ")
 print(loss)
 
@@ -233,7 +231,6 @@ def update_parameters(weights, bias, dw, db, learning_rate):
     return weights, bias
 
 learning_rate = 0.01
-
 weights, bias = update_parameters(weights, bias, dw, db, learning_rate)
 
 print("\nUpdated bias:")
@@ -274,6 +271,25 @@ val_accuracy = compute_accuracy(y_val, val_predictions)
 print("\nValidation Accuracy:")
 print(val_accuracy)
 
+tp = np.sum((y_val == 1) & (val_predictions == 1))
+tn = np.sum((y_val == 0) & (val_predictions == 0))
+fp = np.sum((y_val == 0) & (val_predictions == 1))
+fn = np.sum((y_val == 1) & (val_predictions == 0))
+
+print("\nConfusion Matrix")
+print("TP:", tp)
+print("TN:", tn)
+print("FP:", fp)
+print("FN:", fn)
+
+precision = tp / (tp + fp)
+recall = tp / (tp + fn)
+f1 = 2 * precision * recall / (precision + recall)
+
+print("\nPrecision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
 print("\nnp.sum Validation predictions:")
 print(np.sum(val_predictions))
 
@@ -300,13 +316,25 @@ thresholds = [
 ]
 val_probs = forward_pass(X_val,weights,bias)
 print("\nThreshold Results")
+
 for threshold in thresholds:
     preds = predict_with_threshold(val_probs,threshold)
-
     accuracy = compute_accuracy(y_val,preds)
+
+    tp = np.sum((y_val == 1) & (preds == 1))
+    fp = np.sum((y_val == 0) & (preds == 1))
+    fn = np.sum((y_val == 1) & (preds == 0))
+
+    precision = tp / (tp + fp + 1e-15)
+    recall = tp / (tp + fn + 1e-15)
+
+    f1 = (2 * precision * recall / (precision + recall + 1e-15))
 
     print(
         f"Threshold={threshold:.2f}"
         f" Accuracy={accuracy:.6f}"
-        f" Positives={np.sum(preds)}"
+        f" TP={tp}"
+        f" FP={fp}"
+        f" Recall={recall:.4f}"
+        f" F1={f1:.4f}"
     )
