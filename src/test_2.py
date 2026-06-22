@@ -27,10 +27,11 @@ categorical_cols = [
     "region",
     "noise_cat_1"
 ]
-#for col in categorical_cols:
-#    print("\n"+"="*50)
-#    print(col)
-#    print(train[col].value_counts(dropna=False))
+for col in categorical_cols:
+    print("\n"+"="*50)
+    print(col)
+    print(train[col].value_counts(dropna=False))
+
 #print("\n"+"="*50)
 #print("num feature summ. ")
 #print(train.describe())
@@ -54,6 +55,7 @@ def handle_missing_values(train_df, test_df):
 
     for col in numerical_cols:
         median_value = train_df[col].median()
+
         train_df[col] = train_df[col].fillna(median_value)
         test_df[col] = test_df[col].fillna(median_value)
 
@@ -94,10 +96,12 @@ def encode_categorical_features(train_df, test_df):
     )
 
     train_rows = len(train_df)
+
     X_train = combined.iloc[:train_rows]
     X_test = combined.iloc[train_rows:]
     X_train = X_train.copy()
     X_train["default"] = train_df["default"].values
+
     return X_train, X_test
 
 train, test = encode_categorical_features(train, test)
@@ -111,8 +115,8 @@ noise_columns = [
     "noise_cat_1_C",
     "noise_cat_1_D"
 ]
-train = train.drop(columns=noise_columns)
-test = test.drop(columns=noise_columns)
+#train = train.drop(columns=noise_columns)
+#test = test.drop(columns=noise_columns)
 
 #print("\nTrain shape after encoding:")
 #print(train.shape)
@@ -132,7 +136,11 @@ def scale_features(train_df, test_df):
         "loan_amount",
         "loan_term_months",
         "num_late_payments",
-        "savings_balance"
+        "savings_balance",
+        "noise_num_1",
+        "noise_num_2",
+        "noise_num_3",
+        "noise_num_4"
     ]
     for col in numerical_cols:
         mean = train_df[col].mean()
@@ -161,10 +169,22 @@ print("\nX shape:", X.shape)
 print("y shape:", y.shape)
 print("X_test shape:", X_test.shape)
 
-X_train = X
-y_train = y
+indices = np.arange(len(X))
+np.random.shuffle(indices)
+
+split_index = int(len(X) * 0.8)
+
+train_idx = indices[:split_index]
+val_idx = indices[split_index:]
+
+X_train = X[train_idx]
+y_train = y[train_idx]
+
+X_val = X[val_idx]
+y_val = y[val_idx]
 
 print("\nTraining samples:", len(X_train))
+
 
 def sigmoid(z):
     z = np.clip(z, -500, 500)
@@ -183,18 +203,20 @@ def forward_pass(X, weights, bias):
 weights, bias = initialize_parameters(X_train.shape[1])
 predictions = forward_pass(X_train, weights, bias)
 
-#print("\nFirst 10 predictions:")
-#print(predictions[:10])
+print("\nFirst 10 predictions:")
+print(predictions[:10])
 
 def compute_loss(y_true, y_pred):
     epsilon = 1e-15
     y_pred = np.clip(y_pred, epsilon, 1-epsilon)
-    loss = -np.mean(y_true * np.log(y_pred)+(1 - y_true) * np.log(1 - y_pred))
+    loss = -np.mean(
+        y_true * np.log(y_pred)+(1 - y_true) * np.log(1 - y_pred)
+    )
     return loss
 loss = compute_loss(y_train, predictions)
 
-#print("\ninitial loss: ")
-#print(loss)
+print("\ninitial loss: ")
+print(loss)
 
 def compute_gradients(X, y_true, y_pred):
     m = len(y_true)
@@ -204,11 +226,11 @@ def compute_gradients(X, y_true, y_pred):
     return dw, db
 
 dw, db = compute_gradients(X_train, y_train, predictions)
-#print("\ndw shape:")
-#print(dw.shape)
+print("\ndw shape:")
+print(dw.shape)
 
-#print("\ndb shape:")
-#print(db.shape)
+print("\ndb shape:")
+print(db.shape)
 
 def update_parameters(weights, bias, dw, db, learning_rate):
     weights = weights - learning_rate * dw
@@ -218,11 +240,11 @@ def update_parameters(weights, bias, dw, db, learning_rate):
 learning_rate = 0.01
 weights, bias = update_parameters(weights, bias, dw, db, learning_rate)
 
-#print("\nUpdated bias:")
-#print(bias)
+print("\nUpdated bias:")
+print(bias)
 
-#print("\nFirst 5 weights:")
-#print(weights[:5])
+print("\nFirst 5 weights:")
+print(weights[:5])
 
 def train_lr(X_train, y_train, learning_rate, epochs):
     weights, bias = initialize_parameters(X_train.shape[1])
@@ -241,6 +263,12 @@ test_predictions = (test_probabilities >= 0.50).astype(int)
 
 print("\nPredicted defaults in test set:")
 print(np.sum(test_predictions))
+
+val_probs = forward_pass(X_val, weights, bias)
+val_predictions = (val_probs >= 0.50).astype(int)
+val_accuracy = np.mean(y_val == val_predictions)
+print("\nValidation Accuracy:")
+print(val_accuracy)
 
 submission = pd.DataFrame({"id": test_ids,"default": test_predictions})
 submission.to_csv("../submission.csv",index=False)
