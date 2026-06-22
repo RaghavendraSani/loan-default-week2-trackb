@@ -165,11 +165,19 @@ print("\nX shape:", X.shape)
 print("y shape:", y.shape)
 print("X_test shape:", X_test.shape)
 
-X_train = X
-y_train = y
+indices = np.arange(len(X))
+np.random.shuffle(indices)
 
-print("\nTraining samples:", len(X_train))
+split_index = int(len(X) * 0.8)
 
+train_idx = indices[:split_index]
+val_idx = indices[split_index:]
+
+X_train = X[train_idx]
+y_train = y[train_idx]
+
+X_val = X[val_idx]
+y_val = y[val_idx]
 
 def sigmoid(z):
     z = np.clip(z, -500, 500)
@@ -191,26 +199,28 @@ predictions = forward_pass(X_train, weights, bias)
 print("\nFirst 10 predictions:")
 print(predictions[:10])
 
-def compute_loss(y_true, y_pred):
+lambda_value = 0.1
+
+def compute_loss(y_true, y_pred, weights):
     epsilon = 1e-15
-    y_pred = np.clip(y_pred, epsilon, 1-epsilon)
-    loss = -np.mean(
-        y_true * np.log(y_pred)+(1 - y_true) * np.log(1 - y_pred)
-    )
-    return loss
-loss = compute_loss(y_train, predictions)
+    y_pred = np.clip(y_pred,epsilon,1 - epsilon)
+    bce_loss = -np.mean(y_true * np.log(y_pred)+(1 - y_true) * np.log(1 - y_pred))
+    l2_penalty = (lambda_value / (2 * len(y_true))) * np.sum(weights ** 2)
+    return bce_loss + l2_penalty
+
+loss = compute_loss(y_train, predictions, weights)
 
 print("\ninitial loss: ")
 print(loss)
 
-def compute_gradients(X, y_true, y_pred):
+def compute_gradients(X, y_true, y_pred, weights):
     m = len(y_true)
     error = y_pred - y_true
-    dw = 1/m * np.dot(X.T, error)
+    dw = 1/m * np.dot(X.T, error) + (lambda_value / m) * weights
     db = 1/m * np.sum(error)
     return dw, db
 
-dw, db = compute_gradients(X_train, y_train, predictions)
+dw, db = compute_gradients(X_train, y_train, predictions, weights)
 print("\ndw shape:")
 print(dw.shape)
 
@@ -235,8 +245,8 @@ def train_lr(X_train, y_train, learning_rate, epochs):
     weights, bias = initialize_parameters(X_train.shape[1])
     for epoch in range(epochs):
         predictions = forward_pass(X_train, weights, bias)
-        loss = compute_loss(y_train, predictions)
-        dw, db = compute_gradients(X_train, y_train, predictions)
+        loss = compute_loss(y_train, predictions, weights)
+        dw, db = compute_gradients(X_train, y_train, predictions, weights)
         weights, bias = update_parameters(weights, bias, dw, db, learning_rate)
         if epoch %500 == 0:
             print(f"epoch {epoch} loss {loss:.6f}")
@@ -244,16 +254,51 @@ def train_lr(X_train, y_train, learning_rate, epochs):
 
 weights, bias = train_lr(X_train, y_train, learning_rate=0.01, epochs=5000)
 
-test_probabilities = forward_pass(X_test,weights,bias)
+def predict(X, weights, bias):
+    probabilities = forward_pass(X, weights, bias)
+    predictions = (probabilities >= 0.47).astype(int)
+    return predictions
 
-test_predictions = (test_probabilities >= 0.50).astype(int)
+def compute_accuracy(y_true, y_pred):
+    accuracy = np.mean(y_true == y_pred)
+    return accuracy
+
+test_probabilities = forward_pass(X_test,weights,bias)
+test_predictions = (test_probabilities >= 0.47).astype(int)
 
 print("\nPredicted defaults in test set:")
 print(np.sum(test_predictions))
 
+val_predictions = predict(X_val, weights, bias)
+val_accuracy = compute_accuracy(y_val, val_predictions)
+
+print("\nValidation Accuracy:")
+print(val_accuracy)
+
+print("\nThreshold Sweep")
+val_probs = forward_pass(X_val, weights, bias)
+thresholds = [
+    0.40,
+    0.41,
+    0.42,
+    0.43,
+    0.44,
+    0.45,
+    0.46,
+    0.47,
+    0.48,
+    0.49,
+    0.50
+]
+for threshold in thresholds:
+    preds = (val_probs >= threshold).astype(int)
+    accuracy = np.mean(y_val == preds)
+    print(
+        f"Threshold={threshold:.2f}"
+        f" Accuracy={accuracy:.6f}"
+    )
+
 submission = pd.DataFrame({"id": test_ids,"default": test_predictions})
-
 submission.to_csv("../submission.csv",index=False)
-
 print("\nSubmission file created.")
 print(submission.head())
