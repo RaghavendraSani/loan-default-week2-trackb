@@ -212,3 +212,101 @@ def compute_loss(y_true, y_pred):
 loss = compute_loss(y_train, predictions)
 print("\ninitial loss: ")
 print(loss)
+
+def compute_gradients(X, y_true, y_pred):
+    m = len(y_true)
+    error = y_pred - y_true
+    dw = 1/m * np.dot(X.T, error)
+    db = 1/m * np.sum(error)
+    return dw, db
+
+dw, db = compute_gradients(X_train, y_train, predictions)
+print("\ndw shape:")
+print(dw.shape)
+
+print("\ndb shape:")
+print(db.shape)
+
+def update_parameters(weights, bias, dw, db, learning_rate):
+    weights = weights - learning_rate * dw
+    bias = bias - learning_rate * db
+    return weights, bias
+
+learning_rate = 0.01
+
+weights, bias = update_parameters(weights, bias, dw, db, learning_rate)
+
+print("\nUpdated bias:")
+print(bias)
+
+print("\nFirst 5 weights:")
+print(weights[:5])
+
+def train_lr(X_train, y_train, learning_rate, epochs):
+    weights, bias = initialize_parameters(X_train.shape[1])
+    for epoch in range(epochs):
+        predictions = forward_pass(X_train, weights, bias)
+        loss = compute_loss(y_train, predictions)
+        dw, db = compute_gradients(X_train, y_train, predictions)
+        weights, bias = update_parameters(weights, bias, dw, db, learning_rate)
+        if epoch %500 == 0:
+            print(f"epoch {epoch} loss {loss:.6f}")
+    return weights, bias
+
+weights, bias = train_lr(X_train, y_train, learning_rate=0.01, epochs=5000)
+
+def predict(X, weights, bias):
+    probabilities = forward_pass(X, weights, bias)
+    predictions = (probabilities > 0.5).astype(int)
+    return predictions
+
+def compute_accuracy(y_true, y_pred):
+    accuracy = np.mean(y_true == y_pred)
+    return accuracy
+
+train_probs = forward_pass(X_train,weights,bias)
+train_accuracy = compute_accuracy(y_train,(train_probs >= 0.4).astype(int))
+print("\nTrain Accuracy:")
+print(train_accuracy)
+
+val_predictions = predict(X_val, weights, bias)
+val_accuracy = compute_accuracy(y_val, val_predictions)
+print("\nValidation Accuracy:")
+print(val_accuracy)
+
+print("\nnp.sum Validation predictions:")
+print(np.sum(val_predictions))
+
+val_probs = forward_pass(X_val,weights,bias)
+print("\nProbability statistics")
+print("Min:", np.min(val_probs))
+print("Max:", np.max(val_probs))
+print("Mean:", np.mean(val_probs))
+
+print("\nTop 20 probabilities")
+print(np.sort(val_probs)[-20:])
+
+def predict_with_threshold(probabilities,threshold):
+    return (probabilities >= threshold).astype(int)
+
+thresholds = [
+    0.20,
+    0.25,
+    0.30,
+    0.35,
+    0.40,
+    0.45,
+    0.50
+]
+val_probs = forward_pass(X_val,weights,bias)
+print("\nThreshold Results")
+for threshold in thresholds:
+    preds = predict_with_threshold(val_probs,threshold)
+
+    accuracy = compute_accuracy(y_val,preds)
+
+    print(
+        f"Threshold={threshold:.2f}"
+        f" Accuracy={accuracy:.6f}"
+        f" Positives={np.sum(preds)}"
+    )
